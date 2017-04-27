@@ -47,7 +47,28 @@ def project_impl(K, Rt, points):
     Output:
         projections -- height x width x 2 array of 2D projections
     """
-    raise NotImplementedError()
+
+    # calculate projection matrix
+    projection_matrix = K.dot(Rt)
+
+    height, width = points.shape[:2] # extract original shape
+
+    projections = np.zeros((height, width, 2)) # new 2D matrix
+
+    curr_point = np.zeros(3)
+
+    # apply transformation to every point
+    for row_i, row in enumerate(points):
+        for col_j, column in enumerate(row):
+            curr_point = np.array(points[row_i, col_j]) # store 3vec of current point
+            fourvec = np.array([curr_point[0], curr_point[1], curr_point[2], 1.0]) # construct 4vec of current point
+
+            homogenous_pt = projection_matrix.dot(fourvec) # calculate new point in homogenous coords
+            new_pt = np.array([homogenous_pt[0]/homogenous_pt[2], homogenous_pt[1]/homogenous_pt[2]]) # calculate project point
+
+            projections[row_i, col_j] = new_pt # add it to matrix
+
+    return projections
 
 
 
@@ -98,7 +119,46 @@ def preprocess_ncc_impl(image, ncc_size):
     Output:
         normalized -- heigth x width x (channels * ncc_size**2) array
     """
-    raise NotImplementedError()
+    # get image shape
+    height, width, num_channels = image.shape
+
+    window_offset = int(ncc_size/2) # calculate window offset
+
+    patch_vector = np.zeros((ncc_size**2)) # fill patch vector with zeros
+
+    normalized = np.zeros((height, width, (num_channels * (ncc_size**2)))) # matrix to fill
+
+    for row_i in range(window_offset, height-window_offset):
+        for col_k in range(window_offset, width-window_offset):
+            # grab window
+            patch_vector = image[row_i - window_offset:row_i + window_offset + 1, col_k - window_offset:col_k + window_offset + 1,:]
+
+            # subtract channel means
+            mean_vec = np.mean(np.mean(patch_vector, axis=0), axis=0)
+            patch_vector = patch_vector - mean_vec
+
+            new_vec = np.zeros((num_channels * (ncc_size**2)))
+
+            big_index = 0
+
+            # rearrange in the order specified
+            for channel in range(num_channels):
+                for row in range(patch_vector.shape[0]):
+                    for col in range(patch_vector.shape[1]):
+                        new_vec[big_index] = patch_vector[row,col,channel]
+                        big_index += 1
+
+            # flatten, compute norm, and divide by norm
+            patch_vector = new_vec
+            if(np.linalg.norm(patch_vector) >= 1e-6):
+                patch_vector /= np.linalg.norm(patch_vector)
+            else:
+                patch_vector = np.zeros((num_channels * ncc_size**2))
+
+            # set correct position of normalized matrix
+            normalized[row_i, col_k] = patch_vector
+
+    return normalized
 
 
 def compute_ncc_impl(image1, image2):
@@ -113,4 +173,12 @@ def compute_ncc_impl(image1, image2):
         ncc -- height x width normalized cross correlation between image1 and
                image2.
     """
-    raise NotImplementedError()
+    height, width = image1.shape[:2] # extract shape
+    ncc = np.zeros((height, width)) # new matrix
+
+    # iterate through each pixel and compute cross correlation at each
+    for row_i in range(height):
+        for col_k in range(width):
+            ncc[row_i, col_k] = np.correlate(image1[row_i, col_k], image2[row_i, col_k])
+
+    return ncc
