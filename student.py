@@ -31,7 +31,25 @@ def compute_photometric_stereo_impl(lights, images):
         normals -- float32 height x width x 3 image with dimensions matching
                    the input images.
     """
-    raise NotImplementedError()
+    L = lights.T
+    L_T = L.T
+    albedo = np.zeros((images[0].shape[0], images[0].shape[1], images[0].shape[2]), dtype=np.float32)
+    normals = np.zeros((images[0].shape[0], images[0].shape[1], 3), dtype=np.float32)
+    term1 = np.linalg.inv(L_T.dot(L)) # term1 of least squares solution
+    for channel in range(images[0].shape[2]):
+        for row in range(images[0].shape[0]):
+            for col in range(images[0].shape[1]):
+                I = [(images[i][row][col][channel]).T for i in range(len(images))]
+                term2 = L_T.dot(I) # term2 of least squares solution
+                G = term1.dot(term2) # least squares solution
+                k = np.round(np.linalg.norm(G), 5)
+                if k < 1e-7:
+                    k = 0
+                else:
+                    normals[row][col] += G/k
+                albedo[row][col][channel] = k
+    normals /= images[0].shape[2]
+    return albedo, normals
 
 
 
